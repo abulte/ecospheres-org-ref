@@ -70,3 +70,5 @@ Pistes d'exploitation :
 - Wikidata porte également :
     - Le [SIREN de l'organisation](https://www.wikidata.org/wiki/Property:P1616), ce qui pourrait permettre de remonter à data.gouv.fr via le SIRET.
     - L'[id de l'organisation sur data.gouv.fr](https://www.wikidata.org/wiki/Property:P3206) pour certaines organisations — [voir les travaux ici](https://github.com/pachevalier/organisations-data-gouv).
+
+_Mise à jour_ : le script supporte l'interrogation de wikidata pour récupérer via l'`itm_identifiant` le lien wikipedia et l'organisation data.gouv.fr. Un flag `CRAWL_WIKIDATA` permet d'activer ou désactiver ce comportement. En pratique peu d'organisations sont trouvées (cf fichier markdown de sortie).

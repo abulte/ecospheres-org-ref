@@ -1,6 +1,10 @@
 import json
 import zipfile
 
+from SPARQLWrapper import SPARQLWrapper, JSON
+
+CRAWL_WIKIDATA = True
+
 ZIP_PATH = "dila_refOrga_admin_Etat_fr.json.zip"
 ID_MTE = "05f90b6a-e3d9-4a41-a919-2e2f2d77e517"
 ID_GVT = "622a21da-ff27-4f5a-ae74-133aa03d905f"
@@ -109,9 +113,14 @@ def do():
         if item["type_hierarchie"] != "Service Fils":
             parent = find_top_level_parent_by_id(item["id"], sf_graph)
             parent = get_by_id(parent, data)
-        print(f"{indent(level)} {item['nom']} :: {type_hierarchie}")
+        current_node = get_by_id(item["id"], data)
+        links = entity_links(current_node.get('itm_identifiant'))
+        print(
+            f"{indent(level)} {item['nom']} :: {type_hierarchie} {links}"
+        )
         if parent:
-            print(f"{indent(level + 1)} PARENT: {parent['nom']}")
+            links = entity_links(parent.get('itm_identifiant'))
+            print(f"{indent(level + 1)} PARENT: {parent['nom']} {links}")
 
         # find alternate parents for level 0
         alt_parents = []
@@ -121,7 +130,52 @@ def do():
             )
         for ap in alt_parents:
             ap_obj = get_by_id(ap, data)
-            print(f"{indent(level + 1)} ALT PARENT: {ap_obj['nom']}")
+            links = entity_links(ap_obj.get('itm_identifiant'))
+            print(f"{indent(level + 1)} ALT PARENT: {ap_obj['nom']} {links}")
+
+
+def entity_links(id_sp: str | None):
+    if not CRAWL_WIKIDATA:
+        return
+    wd_uri = query_wikidata_by_id_sp(id_sp) if id_sp else None
+    dgfr_link = None
+    if wd_uri:
+        dgfr_id = query_wikidata_by_entity(wd_uri)
+        dgfr_link = f"https://www.data.gouv.fr/organizations/{dgfr_id}/" if dgfr_id else ""
+    wd_link = f"[wd]({wd_uri})" if wd_uri else ""
+    dgfr_link = f"[dgfr]({dgfr_link})" if dgfr_link else ""
+    return f"{wd_link} {dgfr_link}"
+
+
+def query_wikidata_by_id_sp(id_sp: str):
+    property_value = f"gouvernement/administration-centrale-ou-ministere_{id_sp}"
+    sparql = SPARQLWrapper("https://query.wikidata.org/sparql")
+    sparql.setQuery("""
+        SELECT?item?itemLabel WHERE {
+           ?item wdt:%s "%s".
+            SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }
+        }""" % ("P6671", property_value))
+    sparql.setReturnFormat(JSON)
+    results = sparql.query().convert()
+
+    results = results["results"]["bindings"]  # type: ignore
+    assert len(results) <= 1, "Multiple wikidata match on id_sp"
+    return results[0]["item"]["value"] if results else None  # type: ignore
+
+
+def query_wikidata_by_entity(entity_uri: str):
+    sparql = SPARQLWrapper("https://query.wikidata.org/sparql")
+    entity_id = entity_uri.split("/")[-1]
+    sparql.setQuery("""
+        SELECT?value WHERE {
+            wd:%s wdt:%s?value.
+        }""" % (entity_id, "P3206"))
+    sparql.setReturnFormat(JSON)
+    results = sparql.query().convert()
+
+    results = results["results"]["bindings"]  # type: ignore
+    assert len(results) <= 1, "Multiple wikidata match on entity_uri"
+    return results[0]["value"]["value"] if results else None  # type: ignore
 
 
 if __name__ == "__main__":
